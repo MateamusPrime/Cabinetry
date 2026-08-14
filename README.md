@@ -7,6 +7,30 @@ nesting diagrams, and the estimate all move with it.
 Runs entirely in your browser. Nothing is uploaded anywhere; your projects live
 in local storage and export to a file when you want a backup.
 
+## What it looks like
+
+**3D Design.** Cabinets and appliances come off the library on the left, size and materials on the right. The panel tracks how the wall adds up as you go: wall length, what the corner takes, what the cabinets use, and what is left over. Orbit the 3D view or drag cabinets straight onto the plan.
+
+![3D design view with a worked kitchen](docs/screenshots/01-design.png)
+
+**Plan view.** Drag cabinets and appliances into place. They snap to a quarter inch and sit flush against their neighbours, and each wall carries a dimension line with any leftover called out in red.
+
+![Plan view](docs/screenshots/02-plan.png)
+
+**Cut List.** Every part, grouped by material or by cabinet, with grain direction and which edges get banded. Exports to CSV and prints clean.
+
+![Cut list](docs/screenshots/03-cutlist.png)
+
+**Cut Diagrams.** Sheet layouts from a guillotine optimizer, so every cut runs edge to edge the way a panel saw actually works. Respects kerf, edge trim, and grain. Each sheet reports its own yield.
+
+![Guillotine sheet nesting with per-sheet yield](docs/screenshots/04-nesting.png)
+
+**Estimate.** Two views of the same numbers. Internal cost breaks out material, labor, overhead and margin, with cost allocated per cabinet by build hours rather than a flat per-unit split. Client quote is the printable version with the cost structure stripped out.
+
+![Internal cost estimate](docs/screenshots/05-estimate.png)
+
+*Screenshots are the included `demo-kitchen.cabinetry.json` job, so you can open exactly this and click around.*
+
 ## Running it
 
 ```bash
