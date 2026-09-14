@@ -46,7 +46,7 @@ export interface NestResult {
   averageYield: number;
 }
 
-interface FreeRect {
+export interface FreeRect {
   x: number;
   y: number;
   w: number;
@@ -106,8 +106,29 @@ function splitFree(rect: FreeRect, usedW: number, usedH: number): FreeRect[] {
   return out.filter((r) => r.w > 0.01 && r.h > 0.01);
 }
 
-/** Drop free rectangles fully contained inside another. */
-function prune(rects: FreeRect[]): FreeRect[] {
+/** Tolerance for treating two edges as being in the same place. */
+const EPS = 1e-6;
+
+/** The same rectangle, to the tolerance the containment test works at. */
+function sameRect(a: FreeRect, b: FreeRect): boolean {
+  return (
+    Math.abs(a.x - b.x) <= EPS &&
+    Math.abs(a.y - b.y) <= EPS &&
+    Math.abs(a.w - b.w) <= EPS &&
+    Math.abs(a.h - b.h) <= EPS
+  );
+}
+
+/**
+ * Drop free rectangles fully contained inside another.
+ *
+ * Sameness is measured at the same tolerance as containment, and it has to be.
+ * Comparing exactly while containing loosely means a pair that differs by less
+ * than EPS reads as "each one inside the other, yet not identical" — so every
+ * copy is dropped and the free space disappears from the sheet, costing yield
+ * or an extra sheet with nothing to show for it.
+ */
+export function prune(rects: FreeRect[]): FreeRect[] {
   const keep: FreeRect[] = [];
   for (let i = 0; i < rects.length; i++) {
     const a = rects[i];
@@ -115,13 +136,14 @@ function prune(rects: FreeRect[]): FreeRect[] {
     for (let j = 0; j < rects.length; j++) {
       if (i === j) continue;
       const b = rects[j];
-      if (a.x >= b.x - 1e-6 && a.y >= b.y - 1e-6 && a.x + a.w <= b.x + b.w + 1e-6 && a.y + a.h <= b.y + b.h + 1e-6) {
-        // Keep exactly one of a pair of identical rectangles.
-        if (a.w === b.w && a.h === b.h && a.x === b.x && a.y === b.y && j < i) {
-          contained = true;
-          break;
-        }
-        if (!(a.w === b.w && a.h === b.h && a.x === b.x && a.y === b.y)) {
+      if (a.x >= b.x - EPS && a.y >= b.y - EPS && a.x + a.w <= b.x + b.w + EPS && a.y + a.h <= b.y + b.h + EPS) {
+        if (sameRect(a, b)) {
+          // One of the pair survives: whichever comes first in the list.
+          if (j < i) {
+            contained = true;
+            break;
+          }
+        } else {
           contained = true;
           break;
         }
