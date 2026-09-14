@@ -21,6 +21,9 @@ export function JobsPanel({ onClose }: { onClose: () => void }) {
   const [newName, setNewName] = useState('');
   const [newClient, setNewClient] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  // Storage can refuse a write — usually a full quota. Never fail silently
+  // here: the whole point of the library is that saved work stays saved.
+  const [error, setError] = useState<string | null>(null);
 
   const jobs = useMemo(() => {
     void tick;
@@ -30,7 +33,7 @@ export function JobsPanel({ onClose }: { onClose: () => void }) {
   const refresh = () => setTick((t) => t + 1);
 
   const saveCurrent = () => {
-    saveJob();
+    setError(saveJob());
     refresh();
   };
 
@@ -57,6 +60,8 @@ export function JobsPanel({ onClose }: { onClose: () => void }) {
           <h2>Jobs</h2>
           <button className="ghost sm" onClick={onClose}>Close</button>
         </div>
+
+        {error && <div className="alert bad">{error}</div>}
 
         <div className="alert info">
           Open job: <strong>{project.name}</strong>
@@ -95,10 +100,12 @@ export function JobsPanel({ onClose }: { onClose: () => void }) {
             <button
               disabled={!newName.trim()}
               onClick={() => {
-                newJob(newName.trim(), newClient.trim());
+                const failed = newJob(newName.trim(), newClient.trim());
+                setError(failed);
+                refresh();
+                if (failed) return;
                 setNewName('');
                 setNewClient('');
-                refresh();
                 onClose();
               }}
             >
@@ -150,9 +157,10 @@ export function JobsPanel({ onClose }: { onClose: () => void }) {
                         className="sm"
                         disabled={j.id === project.id}
                         onClick={() => {
-                          openJob(j.id);
+                          const failed = openJob(j.id);
+                          setError(failed);
                           refresh();
-                          onClose();
+                          if (!failed) onClose();
                         }}
                       >
                         Open
@@ -160,7 +168,7 @@ export function JobsPanel({ onClose }: { onClose: () => void }) {
                       <button
                         className="sm ghost"
                         onClick={() => {
-                          duplicateJob(j.id);
+                          setError(duplicateJob(j.id));
                           refresh();
                         }}
                       >
@@ -170,7 +178,7 @@ export function JobsPanel({ onClose }: { onClose: () => void }) {
                         <button
                           className="sm danger"
                           onClick={() => {
-                            deleteJob(j.id);
+                            setError(deleteJob(j.id));
                             setConfirmDelete(null);
                             refresh();
                           }}
