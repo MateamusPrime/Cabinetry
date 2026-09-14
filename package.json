@@ -15,15 +15,15 @@
   "dependencies": {
     "@react-three/drei": "^10.7.6",
     "@react-three/fiber": "^9.3.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "react": "~19.2.0",
+    "react-dom": "~19.2.0",
     "three": "^0.180.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",
-    "@types/react": "^19.2.2",
-    "@types/react-dom": "^19.2.1",
+    "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.1",
     "@types/three": "^0.180.0",
     "@vitejs/plugin-react": "^5.0.4",
     "jsdom": "^30.0.1",
