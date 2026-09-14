@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { boardFeet, formatFeetInches, formatFrac, parseDim } from '../units';
 import {
   APPLIANCE_PRESETS,
@@ -3897,5 +3897,91 @@ describe('geometry', () => {
     const a = makeCabinet('base', project, { width: 24, x: 0 });
     const b = makeCabinet('base', project, { width: 24, x: 24 });
     expect(findCollisions([a, b])).toHaveLength(0);
+  });
+});
+
+describe('the job library never fails silently', () => {
+  type G = { localStorage?: Storage };
+
+  /** A localStorage good enough for the store, with writes we can sabotage. */
+  function installStorage(): Storage {
+    const cells = new Map<string, string>();
+    const fake = {
+      getItem: (k: string) => cells.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        cells.set(k, v);
+      },
+      removeItem: (k: string) => {
+        cells.delete(k);
+      },
+      clear: () => cells.clear(),
+      key: () => null,
+      length: 0,
+    } as unknown as Storage;
+    (globalThis as G).localStorage = fake;
+    return fake;
+  }
+
+  /** What a browser throws once the origin's storage is full. */
+  function refuseWrites(fake: Storage) {
+    fake.setItem = () => {
+      const err = new Error('exceeded the quota');
+      err.name = 'QuotaExceededError';
+      throw err;
+    };
+  }
+
+  afterEach(() => {
+    delete (globalThis as G).localStorage;
+  });
+
+  it('reports success when storage accepts the write', () => {
+    installStorage();
+    useProject.getState().newProject('Filed away');
+    expect(useProject.getState().saveJob()).toBeNull();
+  });
+
+  it('explains a full quota instead of throwing out of the click handler', () => {
+    const fake = installStorage();
+    useProject.getState().newProject('Too big');
+    refuseWrites(fake);
+    expect(useProject.getState().saveJob()).toMatch(/storage is full/i);
+  });
+
+  it('stays on the open job when the save that precedes a switch fails', () => {
+    const fake = installStorage();
+
+    useProject.getState().newProject('First');
+    const firstId = useProject.getState().project.id;
+    expect(useProject.getState().saveJob()).toBeNull();
+
+    useProject.getState().newProject('Second');
+    const secondId = useProject.getState().project.id;
+
+    // Switching saves the open job first. If that cannot be written, the
+    // switch must not go ahead over the top of unsaved work.
+    refuseWrites(fake);
+    expect(useProject.getState().openJob(firstId)).toMatch(/storage is full/i);
+    expect(useProject.getState().project.id).toBe(secondId);
+  });
+
+  it('reports a failed delete and duplicate rather than looking like it worked', () => {
+    const fake = installStorage();
+    useProject.getState().newProject('Doomed');
+    const id = useProject.getState().project.id;
+    expect(useProject.getState().saveJob()).toBeNull();
+
+    refuseWrites(fake);
+    expect(useProject.getState().deleteJob(id)).toMatch(/storage is full/i);
+    expect(useProject.getState().duplicateJob(id)).toMatch(/storage is full/i);
+  });
+
+  it('passes on an unexpected storage error verbatim', () => {
+    const fake = installStorage();
+    useProject.getState().newProject('Odd failure');
+    fake.setItem = () => {
+      throw new Error('storage is disabled in this context');
+    };
+    expect(useProject.getState().saveJob()).toMatch(/storage is disabled in this context/);
   });
 });

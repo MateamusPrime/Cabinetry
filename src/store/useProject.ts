@@ -292,13 +292,16 @@ interface ProjectState {
 
   applyRoomShape: (shape: RoomShape, width?: number, depth?: number) => void;
 
-  /** Save the open project into the job library, creating or overwriting. */
-  saveJob: () => void;
+  /**
+   * Save the open project into the job library, creating or overwriting.
+   * Returns null on success, or a message explaining why nothing was saved.
+   */
+  saveJob: () => string | null;
   listJobs: () => JobSummary[];
-  openJob: (id: string) => void;
-  deleteJob: (id: string) => void;
-  newJob: (name: string, client: string) => void;
-  duplicateJob: (id: string) => void;
+  openJob: (id: string) => string | null;
+  deleteJob: (id: string) => string | null;
+  newJob: (name: string, client: string) => string | null;
+  duplicateJob: (id: string) => string | null;
 
   exportJson: () => string;
   importJson: (json: string) => string | null;
@@ -954,7 +957,7 @@ export const useProject = create<ProjectState>((set, get) => {
       const p = get().project;
       const jobs = readJobs();
       jobs[p.id] = { savedAt: new Date().toISOString(), data: p };
-      localStorage.setItem(LIST_KEY, JSON.stringify(jobs));
+      return writeJobs(jobs);
     },
 
     listJobs: () =>
@@ -983,37 +986,42 @@ export const useProject = create<ProjectState>((set, get) => {
 
     openJob: (id) => {
       const entry = readJobs()[id];
-      if (!entry) return;
-      // Save whatever is open first so switching jobs never loses work.
-      get().saveJob();
+      if (!entry) return null;
+      // Save whatever is open first so switching jobs never loses work. If that
+      // save fails, stay put rather than switching away over the top of it.
+      const failed = get().saveJob();
+      if (failed) return failed;
       const migrated = migrateProject(entry.data);
       persist(migrated);
       set({ project: migrated, selectedCabinetId: null, view: 'design' });
+      return null;
     },
 
     deleteJob: (id) => {
       const jobs = readJobs();
       delete jobs[id];
-      localStorage.setItem(LIST_KEY, JSON.stringify(jobs));
+      return writeJobs(jobs);
     },
 
     newJob: (name, client) => {
-      get().saveJob();
+      const failed = get().saveJob();
+      if (failed) return failed;
       const p = makeProject(name || 'New Project');
       p.client = client;
       persist(p);
       set({ project: p, selectedCabinetId: null, view: 'design' });
+      return null;
     },
 
     duplicateJob: (id) => {
       const entry = readJobs()[id];
-      if (!entry) return;
+      if (!entry) return null;
       const copy: Project = JSON.parse(JSON.stringify(migrateProject(entry.data)));
       copy.id = uid();
       copy.name = `${copy.name} (copy)`;
       const jobs = readJobs();
       jobs[copy.id] = { savedAt: new Date().toISOString(), data: copy };
-      localStorage.setItem(LIST_KEY, JSON.stringify(jobs));
+      return writeJobs(jobs);
     },
 
     exportJson: () => JSON.stringify(get().project, null, 2),
@@ -1137,6 +1145,27 @@ function readJobs(): JobStore {
     return JSON.parse(localStorage.getItem(LIST_KEY) ?? '{}') as JobStore;
   } catch {
     return {};
+  }
+}
+
+/**
+ * Write the job library back to storage.
+ *
+ * Unlike the autosave in `persist`, a failure here cannot be swallowed. Saving
+ * a job is a deliberate act, and the whole library lives under one key, so a
+ * shop with a few dozen jobs can genuinely run the browser out of room. Told
+ * nothing, they would carry on believing the work is safely filed away.
+ */
+function writeJobs(jobs: JobStore): string | null {
+  try {
+    localStorage.setItem(LIST_KEY, JSON.stringify(jobs));
+    return null;
+  } catch (e) {
+    const err = e as Error;
+    if (err.name === 'QuotaExceededError' || err.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+      return 'Browser storage is full, so nothing was saved. Export a job to a file, then delete it from the library to free up room.';
+    }
+    return `Could not save the job library: ${err.message}`;
   }
 }
 
