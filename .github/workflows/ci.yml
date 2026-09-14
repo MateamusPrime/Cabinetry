@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to the same branch supersedes the run in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Typecheck, test and build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22 rather than 20: jsdom asks for ^22.22.2 || ^24.15.0 || >=26,
+      # so the test suite will not run on 20 even though Vite would build on it.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # ci rather than install, so the run uses the locked tree exactly and
+      # fails loudly if the lockfile and package.json have drifted apart.
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # The build writes tsconfig.tsbuildinfo, which is ignored, and nothing
+      # else. Anything showing up here means a generated file has escaped
+      # .gitignore and would eventually be committed by accident.
+      - name: Check the build left the tree clean
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "The build changed tracked files:"
+            git status --porcelain
+            git diff
+            exit 1
+          fi
