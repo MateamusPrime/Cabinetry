@@ -330,6 +330,7 @@ src/
     estimate.ts        cost roll-up and pricing
     __tests__/
   components/        views and controls
+    __tests__/
   store/             project state and local persistence
 ```
 
@@ -343,10 +344,28 @@ the same calculation.
 npm test
 ```
 
-89 tests covering dimension parsing round-trips, door and drawer face layout
-across all three construction styles, corner geometry and clearance, wall
-placement and multi-run layout, part generation, crown run lengths, appliance
-panels, nesting correctness (no overlaps, nothing off-sheet, grain respected),
-collision detection in all three axes, estimate sanity including the margin
-calculation, and project migration — a job saved by an older build must still
-open.
+539 tests, split between the domain layer and the views.
+
+**326 domain tests** cover dimension parsing round-trips, door and drawer face
+layout across all three construction styles, corner geometry and clearance,
+wall placement and multi-run layout, part generation, crown run lengths,
+appliance panels, nesting correctness (no overlaps, nothing off-sheet, grain
+respected), collision detection in all three axes, estimate sanity including
+the margin calculation, and project migration — a job saved by an older build
+must still open.
+
+**213 component tests** cover all fifteen components. They drive the control a
+user would touch and read the store back, so a field wired to a neighbouring
+property cannot pass. The drawings are checked by their geometry rather than
+their captions: the cut diagrams are read off the rendered SVG to confirm no
+two parts overlap, nothing lands off the sheet, and the yield on the card
+matches the area the rectangles actually cover; the 3D dimensions are read off
+the scene graph the same way. The cut list is held to the sizes the domain
+produced and its CSV to nine columns a spreadsheet can open. The estimate is
+checked against the same figures, and the client quote is checked for what it
+must never show — no cost, no margin, no overhead.
+
+Scene3D is the exception, and is covered at mount level only: it owns its own
+canvas, and without WebGL react-three-fiber never builds a renderer, so what
+it draws cannot be inspected from a test. What is covered there is that the
+view survives every shape a project can take.
