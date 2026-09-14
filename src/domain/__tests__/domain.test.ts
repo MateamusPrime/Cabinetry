@@ -35,7 +35,7 @@ import {
 } from '../partsGenerator';
 import { looksLikeProject, migrateProject, useProject } from '../../store/useProject';
 import type { BarTop, Cabinet, Project } from '../types';
-import { nestSheetMaterial } from '../nesting';
+import { nestSheetMaterial, prune, type FreeRect } from '../nesting';
 import { computeEstimate, hingesForDoor, linearFeet } from '../estimate';
 import {
   applyWallPlacements,
@@ -3983,5 +3983,67 @@ describe('the job library never fails silently', () => {
       throw new Error('storage is disabled in this context');
     };
     expect(useProject.getState().saveJob()).toMatch(/storage is disabled in this context/);
+  });
+});
+
+describe('pruning the free rectangles on a sheet', () => {
+  const rect = (x: number, y: number, w: number, h: number): FreeRect => ({ x, y, w, h });
+
+  it('keeps one of a pair of identical rectangles', () => {
+    const kept = prune([rect(0, 0, 10, 10), rect(0, 0, 10, 10)]);
+    expect(kept).toEqual([rect(0, 0, 10, 10)]);
+  });
+
+  it('drops a rectangle that genuinely sits inside another', () => {
+    const kept = prune([rect(1, 1, 2, 2), rect(0, 0, 10, 10)]);
+    expect(kept).toEqual([rect(0, 0, 10, 10)]);
+  });
+
+  it('leaves two rectangles that merely overlap', () => {
+    const kept = prune([rect(0, 0, 10, 10), rect(5, 5, 10, 10)]);
+    expect(kept).toHaveLength(2);
+  });
+
+  /*
+   * Containment is measured with a tolerance and sameness has to be measured
+   * the same way. Comparing exactly while containing loosely made a pair that
+   * differs by a rounding error read as "each one inside the other, yet not
+   * identical", so both were dropped and the space went missing.
+   */
+  it('keeps one of a pair that differs only by floating point dust', () => {
+    const kept = prune([rect(0, 0, 10, 10), rect(1e-9, 0, 10, 10)]);
+    expect(kept).toHaveLength(1);
+  });
+
+  it('keeps one of a whole run of near-identical rectangles', () => {
+    const kept = prune([
+      rect(0, 0, 10, 10),
+      rect(1e-9, 0, 10, 10),
+      rect(2e-9, 1e-9, 10, 10),
+      rect(0, 0, 10 + 1e-9, 10 - 1e-9),
+    ]);
+    expect(kept).toHaveLength(1);
+  });
+
+  it('never loses area that no other rectangle covers', () => {
+    const rects = [rect(0, 0, 10, 10), rect(1e-9, 0, 10, 10), rect(40, 0, 6, 6)];
+    const kept = prune(rects);
+
+    // Every rectangle going in is still covered by one coming out.
+    for (const before of rects) {
+      const covered = kept.some(
+        (k) =>
+          before.x >= k.x - 1e-6 &&
+          before.y >= k.y - 1e-6 &&
+          before.x + before.w <= k.x + k.w + 1e-6 &&
+          before.y + before.h <= k.y + k.h + 1e-6,
+      );
+      expect(covered).toBe(true);
+    }
+  });
+
+  it('is unbothered by an empty list or a single rectangle', () => {
+    expect(prune([])).toEqual([]);
+    expect(prune([rect(0, 0, 4, 4)])).toEqual([rect(0, 0, 4, 4)]);
   });
 });
